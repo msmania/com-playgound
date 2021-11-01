@@ -29,15 +29,18 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID) {
 }
 
 STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void **ppv) {
-  return CLASS_E_CLASSNOTAVAILABLE;
+  return gSI->GetClassObject(rclsid, riid, ppv);
 }
 
 STDAPI DllCanUnloadNow() { return S_OK; }
 
 STDAPI DllRegisterServer() {
-  return gSI->Register_STA() ? S_OK : E_ACCESSDENIED;
+  return gSI->Register_STA() && gSI->EnableContextMenu() ? S_OK
+                                                         : E_ACCESSDENIED;
 }
 
 STDAPI DllUnregisterServer() {
-  return gSI->Unregister() ? S_OK : E_ACCESSDENIED;
+  return gSI->EnableContextMenu(/*trueToDisable*/ true) && gSI->Unregister()
+             ? S_OK
+             : E_ACCESSDENIED;
 }

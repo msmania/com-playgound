@@ -30,13 +30,19 @@ OBJS_TEST=\
 	$(OBJDIR)\tests.obj\
 
 OBJS_DLL=\
+	$(OBJDIR)\contextmenu.obj\
 	$(OBJDIR)\dll.res\
 	$(OBJDIR)\dllmain.obj\
+	$(OBJDIR)\factory.obj\
 	$(OBJDIR)\regutils.obj\
 	$(OBJDIR)\serverinfo.obj\
 
 LIBS=\
 	advapi32.lib\
+	ole32.lib\
+	shell32.lib\
+	shlwapi.lib\
+	user32.lib\
 
 LIBS_TEST=\
 	advapi32.lib\
