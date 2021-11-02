@@ -1,4 +1,6 @@
+#include "regutils.h"
 #include "serverinfo.h"
+#include "shared.h"
 #include <memory>
 #include <strsafe.h>
 
@@ -29,18 +31,24 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID) {
 }
 
 STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void **ppv) {
-  return gSI->GetClassObject(rclsid, riid, ppv);
+  return ::IsEqualCLSID(rclsid, kCLSID_ExtZ_InProc_STA)
+             ? gSI->GetClassObject(riid, ppv)
+             : CLASS_E_CLASSNOTAVAILABLE;
 }
 
 STDAPI DllCanUnloadNow() { return S_OK; }
 
+const wchar_t kFriendlyName_InProc_STA[] = L"Z-InProc-STA";
+
 STDAPI DllRegisterServer() {
-  return gSI->Register_STA() && gSI->EnableContextMenu() ? S_OK
-                                                         : E_ACCESSDENIED;
+  std::wstring clsId = RegUtil::GuidToString(kCLSID_ExtZ_InProc_STA);
+  return gSI->RegisterInprocServer(clsId.c_str(), kFriendlyName_InProc_STA,
+                                   L"Apartment")
+             ? S_OK
+             : E_ACCESSDENIED;
 }
 
 STDAPI DllUnregisterServer() {
-  return gSI->EnableContextMenu(/*trueToDisable*/ true) && gSI->Unregister()
-             ? S_OK
-             : E_ACCESSDENIED;
+  std::wstring clsId = RegUtil::GuidToString(kCLSID_ExtZ_InProc_STA);
+  return gSI->UnregisterServer(clsId.c_str()) ? S_OK : E_ACCESSDENIED;
 }

@@ -1,6 +1,5 @@
 #include "serverinfo.h"
 #include "regutils.h"
-#include "shared.h"
 #include <atlbase.h>
 
 const wchar_t kUserClassRoot[] = L"Software\\Classes\\";
@@ -8,24 +7,21 @@ const wchar_t kDirClsId[] = L"CLSID\\";
 const wchar_t kContextMenuHandlers[] = L".zzz\\shellex\\ContextMenuHandlers\\";
 IUnknown *CreateFactory();
 
-const GUID ServerInfo::CLSID_ExtZ_InProc_STA = kCLSID_ExtZ_InProc_STA;
-const wchar_t ServerInfo::kFriendlyName_InProc_STA[] = L"Z-InProc-STA";
-
-ServerInfo::ServerInfo(HMODULE module)
-    : mClsId(RegUtil::GuidToString(CLSID_ExtZ_InProc_STA)) {
+ServerInfo::ServerInfo(HMODULE module) {
   if (!::GetModuleFileNameW(module, mModulePath, ARRAYSIZE(mModulePath))) {
     mModulePath[0] = 0;
   }
 }
 
-bool ServerInfo::Register_STA() {
+bool ServerInfo::RegisterInprocServer(LPCWSTR clsId, LPCWSTR friendlyName,
+                                      LPCWSTR threadModel) {
   RegUtil root(HKEY_CURRENT_USER, kUserClassRoot);
   if (!root) {
     return false;
   }
 
   std::wstring subkey(kDirClsId);
-  subkey += mClsId;
+  subkey += clsId;
 
   RegUtil server_test(root, subkey.c_str());
   if (server_test) {
@@ -34,25 +30,25 @@ bool ServerInfo::Register_STA() {
   }
 
   RegUtil server(root, subkey.c_str(), /*createIfNotExist*/ true);
-  if (!server || !server.SetString(nullptr, kFriendlyName_InProc_STA)) {
-    Unregister();
+  if (!server || !server.SetString(nullptr, friendlyName)) {
+    UnregisterServer(clsId);
     return false;
   }
 
   RegUtil inproc(server, L"InprocServer32", /*createIfNotExist*/ true);
   if (!inproc || !inproc.SetString(nullptr, mModulePath) ||
-      !inproc.SetString(L"ThreadingModel", L"Apartment")) {
-    Unregister();
+      !inproc.SetString(L"ThreadingModel", threadModel)) {
+    UnregisterServer(clsId);
     return false;
   }
 
   return true;
 }
 
-bool ServerInfo::Unregister() {
+bool ServerInfo::UnregisterServer(LPCWSTR clsId) {
   std::wstring subkey(kUserClassRoot);
   subkey += kDirClsId;
-  subkey += mClsId;
+  subkey += clsId;
 
   LSTATUS ls = ::RegDeleteTreeW(HKEY_CURRENT_USER, subkey.c_str());
   if (ls != ERROR_SUCCESS && ls != ERROR_FILE_NOT_FOUND) {
@@ -62,10 +58,10 @@ bool ServerInfo::Unregister() {
   return true;
 }
 
-bool ServerInfo::EnableContextMenu(bool trueToDisable) {
+bool ServerInfo::EnableContextMenu(LPCWSTR clsId, bool trueToDisable) {
   std::wstring subkey(kUserClassRoot);
   subkey += kContextMenuHandlers;
-  subkey += mClsId;
+  subkey += clsId;
 
   if (trueToDisable) {
     LSTATUS ls = ::RegDeleteTreeW(HKEY_CURRENT_USER, subkey.c_str());
@@ -74,20 +70,15 @@ bool ServerInfo::EnableContextMenu(bool trueToDisable) {
 
   RegUtil handlers(HKEY_CURRENT_USER, subkey.c_str(),
                    /*createIfNotExist*/ true);
-  if (!handlers || !handlers.SetString(nullptr, mClsId)) {
+  if (!handlers || !handlers.SetString(nullptr, clsId)) {
     return false;
   }
 
   return true;
 }
 
-HRESULT ServerInfo::GetClassObject(REFCLSID rclsid, REFIID riid,
-                                   void **ppv) const {
+HRESULT ServerInfo::GetClassObject(REFIID riid, void **ppv) const {
   *ppv = nullptr;
-
-  if (!::IsEqualCLSID(rclsid, CLSID_ExtZ_InProc_STA)) {
-    return CLASS_E_CLASSNOTAVAILABLE;
-  }
 
   CComPtr<IUnknown> factory;
   factory.Attach(CreateFactory());
