@@ -22,7 +22,11 @@ public:
   STDMETHODIMP LockServer(BOOL fLock);
 };
 
-ClassFactory::ClassFactory() : mRef(1) { Log(L"ClassFactory: %p\n", this); }
+ClassFactory::ClassFactory() : mRef(1) {
+#ifdef TRACE_FACTORY
+  Log(L"ClassFactory: %p\n", this);
+#endif
+}
 
 STDMETHODIMP ClassFactory::QueryInterface(REFIID riid, void **ppv) {
   const QITAB QITable[] = {
@@ -47,7 +51,9 @@ STDMETHODIMP_(ULONG) ClassFactory::AddRef() {
 STDMETHODIMP_(ULONG) ClassFactory::Release() {
   auto cref = ::InterlockedDecrement(&mRef);
   if (cref == 0) {
+#ifdef TRACE_FACTORY
     Log(L"Destroying ClassFactory %p\n", this);
+#endif
     delete this;
   }
   return cref;

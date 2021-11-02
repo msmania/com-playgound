@@ -75,3 +75,22 @@ TEST(RegUtils, key) {
 
   EXPECT_EQ(::RegDeleteTreeW(reg_software, kTestGuid), ERROR_SUCCESS);
 }
+
+TEST(RegUtils, guid) {
+  struct {
+    GUID mGuid;
+    LPCWSTR mExpected;
+  } static const kTestCases[] = {
+      {{}, L"{00000000-0000-0000-0000-000000000000}"},
+      {{0x766f63f7,
+        0xe338,
+        0x4cc4,
+        {0x99, 0xc3, 0x19, 0x42, 0x84, 0x26, 0xe9, 0x12}},
+       L"{766f63f7-e338-4cc4-99c3-19428426e912}"},
+  };
+
+  for (const auto &testCase : kTestCases) {
+    std::wstring actual = RegUtil::GuidToString(testCase.mGuid);
+    EXPECT_STREQ(actual.c_str(), testCase.mExpected);
+  }
+}

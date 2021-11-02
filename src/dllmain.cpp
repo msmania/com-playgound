@@ -31,24 +31,54 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID) {
 }
 
 STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void **ppv) {
-  return ::IsEqualCLSID(rclsid, kCLSID_ExtZ_InProc_STA)
+  return ::IsEqualCLSID(rclsid, kCLSID_ExtZ_InProc_STA) ||
+                 ::IsEqualCLSID(rclsid, kCLSID_ExtZ_InProc_STA_Legacy)
              ? gSI->GetClassObject(riid, ppv)
              : CLASS_E_CLASSNOTAVAILABLE;
 }
 
 STDAPI DllCanUnloadNow() { return S_OK; }
 
-const wchar_t kFriendlyName_InProc_STA[] = L"Z-InProc-STA";
+static bool RegisterAllServers(bool trueToUnregister = false) {
+  struct {
+    GUID mGuid;
+    LPCWSTR mFriendlyName;
+    LPCWSTR mThreadModel;
+  } static const kServers[] = {
+      {kCLSID_ExtZ_InProc_STA, L"Z-InProc-STA", L"Apartment"},
+      {kCLSID_ExtZ_InProc_STA_Legacy, L"Z-InProc-STA-Legacy", L"Single"},
+  };
 
-STDAPI DllRegisterServer() {
-  std::wstring clsId = RegUtil::GuidToString(kCLSID_ExtZ_InProc_STA);
-  return gSI->RegisterInprocServer(clsId.c_str(), kFriendlyName_InProc_STA,
-                                   L"Apartment")
-             ? S_OK
-             : E_ACCESSDENIED;
+  bool ok = true;
+  for (const auto &server : kServers) {
+    std::wstring clsId = RegUtil::GuidToString(server.mGuid);
+    if (trueToUnregister) {
+      if (!gSI->UnregisterServer(clsId.c_str())) {
+        // Continue unregistering all servers
+        ok = false;
+      }
+      continue;
+    }
+
+    if (!gSI->RegisterInprocServer(clsId.c_str(), server.mFriendlyName,
+                                   server.mThreadModel)) {
+      // Stop registering servers
+      ok = false;
+      break;
+    }
+  }
+
+  return ok;
 }
 
 STDAPI DllUnregisterServer() {
-  std::wstring clsId = RegUtil::GuidToString(kCLSID_ExtZ_InProc_STA);
-  return gSI->UnregisterServer(clsId.c_str()) ? S_OK : E_ACCESSDENIED;
+  return RegisterAllServers(/*trueToUnregister*/ true) ? S_OK : E_ACCESSDENIED;
+}
+
+STDAPI DllRegisterServer() {
+  if (!RegisterAllServers()) {
+    RegisterAllServers(/*trueToUnregister*/ true);
+    return E_ACCESSDENIED;
+  }
+  return S_OK;
 }
