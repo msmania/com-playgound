@@ -1,5 +1,6 @@
 #include "serverinfo.h"
 #include "regutils.h"
+#include "shared.h"
 #include <atlbase.h>
 
 const wchar_t kUserClassRoot[] = L"Software\\Classes\\";
@@ -7,13 +8,7 @@ const wchar_t kDirClsId[] = L"CLSID\\";
 const wchar_t kContextMenuHandlers[] = L".zzz\\shellex\\ContextMenuHandlers\\";
 IUnknown *CreateFactory();
 
-// {16C324E8-4B82-4648-81A0-E76E3639005E}
-const GUID ServerInfo::CLSID_ExtZ_InProc_STA = {
-    0x16c324e8,
-    0x4b82,
-    0x4648,
-    {0x81, 0xa0, 0xe7, 0x6e, 0x36, 0x39, 0x0, 0x5e}};
-
+const GUID ServerInfo::CLSID_ExtZ_InProc_STA = kCLSID_ExtZ_InProc_STA;
 const wchar_t ServerInfo::kFriendlyName_InProc_STA[] = L"Z-InProc-STA";
 
 ServerInfo::ServerInfo(HMODULE module)
@@ -90,8 +85,7 @@ HRESULT ServerInfo::GetClassObject(REFCLSID rclsid, REFIID riid,
                                    void **ppv) const {
   *ppv = nullptr;
 
-  if (!::IsEqualCLSID(rclsid, CLSID_ExtZ_InProc_STA) ||
-      !::IsEqualCLSID(riid, IID_IClassFactory)) {
+  if (!::IsEqualCLSID(rclsid, CLSID_ExtZ_InProc_STA)) {
     return CLASS_E_CLASSNOTAVAILABLE;
   }
 

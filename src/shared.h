@@ -1,0 +1,10 @@
+#pragma once
+
+#include <windows.h>
+
+// {16C324E8-4B82-4648-81A0-E76E3639005E}
+const GUID kCLSID_ExtZ_InProc_STA = {
+    0x16c324e8,
+    0x4b82,
+    0x4648,
+    {0x81, 0xa0, 0xe7, 0x6e, 0x36, 0x39, 0x0, 0x5e}};

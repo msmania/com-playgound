@@ -29,7 +29,15 @@ STDMETHODIMP ClassFactory::QueryInterface(REFIID riid, void **ppv) {
       QITABENT(ClassFactory, IClassFactory),
       {0},
   };
-  return ::QISearch(this, QITable, riid, ppv);
+
+  HRESULT hr = ::QISearch(this, QITable, riid, ppv);
+#ifdef DEBUG_QI
+  if (hr == E_NOINTERFACE) {
+    std::wstring guid = RegUtil::GuidToString(riid);
+    Log(L"QI of ClassFactory: %s\n", guid.c_str());
+  }
+#endif
+  return hr;
 }
 
 STDMETHODIMP_(ULONG) ClassFactory::AddRef() {
@@ -52,7 +60,8 @@ STDMETHODIMP ClassFactory::CreateInstance(IUnknown *pUnkOuter, REFIID riid,
   }
 
   CComPtr<IUnknown> instance;
-  if (IsEqualCLSID(riid, IID_IContextMenu)) {
+  if (IsEqualCLSID(riid, IID_IContextMenu) ||
+      IsEqualCLSID(riid, IID_IUnknown)) {
     instance.Attach(CreateContextMenuExt());
   } else {
     std::wstring guidStr = RegUtil::GuidToString(riid);

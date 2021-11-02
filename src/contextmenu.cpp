@@ -1,3 +1,4 @@
+#include "regutils.h"
 #include <memory>
 #include <shlobj.h>
 #include <shlwapi.h>
@@ -31,7 +32,7 @@ public:
 };
 
 ContextMenuExt::ContextMenuExt() : mRef(1) {
-  Log(L"ContextMenuExt: %p\n", this);
+  Log(L"[%04x] ContextMenuExt: %p\n", ::GetCurrentThreadId(), this);
 }
 
 STDMETHODIMP ContextMenuExt::QueryInterface(REFIID riid, void **ppv) {
@@ -40,7 +41,15 @@ STDMETHODIMP ContextMenuExt::QueryInterface(REFIID riid, void **ppv) {
       QITABENT(ContextMenuExt, IContextMenu),
       {0},
   };
-  return ::QISearch(this, QITable, riid, ppv);
+
+  HRESULT hr = ::QISearch(this, QITable, riid, ppv);
+#ifdef DEBUG_QI
+  if (hr == E_NOINTERFACE) {
+    std::wstring guid = RegUtil::GuidToString(riid);
+    Log(L"QI of ContextMenuExt: %s\n", guid.c_str());
+  }
+#endif
+  return hr;
 }
 
 STDMETHODIMP_(ULONG) ContextMenuExt::AddRef() {
