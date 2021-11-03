@@ -1,7 +1,6 @@
 #include "shared.h"
 #include <atlbase.h>
 #include <cstdarg>
-#include <functional>
 #include <shlobj.h>
 #include <thread>
 #include <vector>
@@ -13,44 +12,12 @@ void Log(const wchar_t *format, ...) {
   va_end(v);
 }
 
-template <DWORD CoInit> void ComThread(const std::function<void()> &func) {
-  HRESULT hr = ::CoInitializeEx(nullptr, CoInit);
-  if (FAILED(hr)) {
-    Log(L"CoInitializeEx failed - %08lx\n", hr);
-    return;
-  }
-  func();
-  ::CoUninitialize();
-}
-
-void ThreadMsgWaitForSingleObject(HANDLE handle, DWORD dwMilliseconds) {
-  for (;;) {
-    DWORD status = ::MsgWaitForMultipleObjectsEx(
-        1, &handle, dwMilliseconds, QS_SENDMESSAGE | QS_POSTMESSAGE,
-        MWMO_INPUTAVAILABLE);
-    if (status == WAIT_OBJECT_0) {
-      return;
-    }
-
-    if (status != WAIT_OBJECT_0 + 1) {
-      Log(L"MsgWaitForMultipleObjectsEx returned - %08lx\n", status);
-      return;
-    }
-
-    MSG msg;
-    while (::PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
-      ::TranslateMessage(&msg);
-      ::DispatchMessageW(&msg);
-    }
-  }
-}
-
 void TestObject(const std::vector<GUID> &clsIds) {
   CComPtr<IUnknown> comobj;
   for (const auto &clsId : clsIds) {
-    HRESULT hr =
-        comobj.CoCreateInstance(clsId,
-                                /*pUnkOuter*/ nullptr, CLSCTX_INPROC_SERVER);
+    HRESULT hr = comobj.CoCreateInstance(
+        clsId,
+        /*pUnkOuter*/ nullptr, CLSCTX_LOCAL_SERVER | CLSCTX_INPROC_SERVER);
     if (FAILED(hr)) {
       Log(L"CComPtr::CreateInstance failed - %08lx\n", hr);
     }
@@ -104,6 +71,15 @@ int wmain(int argc, wchar_t *argv[]) {
     sta1.join();
   });
   t2.join();
+
+  Log(L"\n# OutProc objects\n#\n");
+  std::thread t3(ComThread<COINIT_MULTITHREADED>, []() {
+    TestObject({
+        kCLSID_ExtZ_OutProc_STA_1,
+        kCLSID_ExtZ_OutProc_STA_2,
+    });
+  });
+  t3.join();
 
   return 0;
 }

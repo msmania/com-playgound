@@ -1,8 +1,13 @@
-#include "regutils.h"
 #include "serverinfo.h"
 #include "shared.h"
 #include <memory>
 #include <strsafe.h>
+
+static const ServerRegistrationEntry kServers[] = {
+    {kCLSID_ExtZ_InProc_STA, L"Z-InProc-STA", L"Apartment"},
+    {kCLSID_ExtZ_InProc_STA_Legacy, L"Z-InProc-STA-Legacy", L"Single"},
+    {},
+};
 
 std::unique_ptr<ServerInfo> gSI;
 
@@ -39,45 +44,15 @@ STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void **ppv) {
 
 STDAPI DllCanUnloadNow() { return S_OK; }
 
-static bool RegisterAllServers(bool trueToUnregister = false) {
-  struct {
-    GUID mGuid;
-    LPCWSTR mFriendlyName;
-    LPCWSTR mThreadModel;
-  } static const kServers[] = {
-      {kCLSID_ExtZ_InProc_STA, L"Z-InProc-STA", L"Apartment"},
-      {kCLSID_ExtZ_InProc_STA_Legacy, L"Z-InProc-STA-Legacy", L"Single"},
-  };
-
-  bool ok = true;
-  for (const auto &server : kServers) {
-    std::wstring clsId = RegUtil::GuidToString(server.mGuid);
-    if (trueToUnregister) {
-      if (!gSI->UnregisterServer(clsId.c_str())) {
-        // Continue unregistering all servers
-        ok = false;
-      }
-      continue;
-    }
-
-    if (!gSI->RegisterInprocServer(clsId.c_str(), server.mFriendlyName,
-                                   server.mThreadModel)) {
-      // Stop registering servers
-      ok = false;
-      break;
-    }
-  }
-
-  return ok;
-}
-
 STDAPI DllUnregisterServer() {
-  return RegisterAllServers(/*trueToUnregister*/ true) ? S_OK : E_ACCESSDENIED;
+  return RegisterAllServers(gSI.get(), kServers, /*trueToUnregister*/ true)
+             ? S_OK
+             : E_ACCESSDENIED;
 }
 
 STDAPI DllRegisterServer() {
-  if (!RegisterAllServers()) {
-    RegisterAllServers(/*trueToUnregister*/ true);
+  if (!RegisterAllServers(gSI.get(), kServers)) {
+    RegisterAllServers(gSI.get(), kServers, /*trueToUnregister*/ true);
     return E_ACCESSDENIED;
   }
   return S_OK;

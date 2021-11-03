@@ -13,8 +13,8 @@ ServerInfo::ServerInfo(HMODULE module) {
   }
 }
 
-bool ServerInfo::RegisterInprocServer(LPCWSTR clsId, LPCWSTR friendlyName,
-                                      LPCWSTR threadModel) {
+bool ServerInfo::RegisterServer(LPCWSTR clsId, LPCWSTR friendlyName,
+                                LPCWSTR threadModel) const {
   RegUtil root(HKEY_CURRENT_USER, kUserClassRoot);
   if (!root) {
     return false;
@@ -35,17 +35,23 @@ bool ServerInfo::RegisterInprocServer(LPCWSTR clsId, LPCWSTR friendlyName,
     return false;
   }
 
-  RegUtil inproc(server, L"InprocServer32", /*createIfNotExist*/ true);
-  if (!inproc || !inproc.SetString(nullptr, mModulePath) ||
-      !inproc.SetString(L"ThreadingModel", threadModel)) {
-    UnregisterServer(clsId);
-    return false;
+  bool ok = false;
+  if (threadModel) {
+    RegUtil inproc(server, L"InprocServer32", /*createIfNotExist*/ true);
+    ok = inproc && inproc.SetString(nullptr, mModulePath) &&
+         inproc.SetString(L"ThreadingModel", threadModel);
+  } else {
+    RegUtil outproc(server, L"LocalServer32", /*createIfNotExist*/ true);
+    ok = outproc && outproc.SetString(nullptr, mModulePath);
   }
 
-  return true;
+  if (!ok) {
+    UnregisterServer(clsId);
+  }
+  return ok;
 }
 
-bool ServerInfo::UnregisterServer(LPCWSTR clsId) {
+bool ServerInfo::UnregisterServer(LPCWSTR clsId) const {
   std::wstring subkey(kUserClassRoot);
   subkey += kDirClsId;
   subkey += clsId;
@@ -58,7 +64,7 @@ bool ServerInfo::UnregisterServer(LPCWSTR clsId) {
   return true;
 }
 
-bool ServerInfo::EnableContextMenu(LPCWSTR clsId, bool trueToDisable) {
+bool ServerInfo::EnableContextMenu(LPCWSTR clsId, bool trueToDisable) const {
   std::wstring subkey(kUserClassRoot);
   subkey += kContextMenuHandlers;
   subkey += clsId;
@@ -83,4 +89,31 @@ HRESULT ServerInfo::GetClassObject(REFIID riid, void **ppv) const {
   CComPtr<IUnknown> factory;
   factory.Attach(CreateFactory());
   return factory ? factory->QueryInterface(riid, ppv) : E_OUTOFMEMORY;
+}
+
+bool RegisterAllServers(const ServerInfo *si,
+                        const ServerRegistrationEntry servers[],
+                        bool trueToUnregister) {
+  constexpr GUID kEmptyGuid = {};
+  bool ok = true;
+  for (const ServerRegistrationEntry *server = servers;
+       server->mGuid != kEmptyGuid; ++server) {
+    std::wstring clsId = RegUtil::GuidToString(server->mGuid);
+    if (trueToUnregister) {
+      if (!si->UnregisterServer(clsId.c_str())) {
+        // Continue unregistering all servers
+        ok = false;
+      }
+      continue;
+    }
+
+    if (!si->RegisterServer(clsId.c_str(), server->mFriendlyName,
+                            server->mThreadModel)) {
+      // Stop registering servers
+      ok = false;
+      break;
+    }
+  }
+
+  return ok;
 }

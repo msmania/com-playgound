@@ -20,10 +20,12 @@ RM=del/q
 LINKER=link
 TARGET_EXE=t.exe
 TARGET_TEST=tests.exe
+TARGET_SERVER=s.exe
 TARGET_DLL=z.dll
 
 OBJS_EXE=\
 	$(OBJDIR)\main.obj\
+	$(OBJDIR)\shared.obj\
 
 OBJS_TEST=\
 	$(OBJDIR)\regutils.obj\
@@ -36,6 +38,16 @@ OBJS_DLL=\
 	$(OBJDIR)\factory.obj\
 	$(OBJDIR)\regutils.obj\
 	$(OBJDIR)\serverinfo.obj\
+	$(OBJDIR)\shared.obj\
+
+OBJS_SERVER=\
+	$(OBJDIR)\contextmenu.obj\
+	$(OBJDIR)\exe.res\
+	$(OBJDIR)\factory.obj\
+	$(OBJDIR)\regutils.obj\
+	$(OBJDIR)\serverinfo.obj\
+	$(OBJDIR)\servermain.obj\
+	$(OBJDIR)\shared.obj\
 
 LIBS=\
 	advapi32.lib\
@@ -68,7 +80,7 @@ LFLAGS=\
 	/DEBUG\
 	/LIBPATH:"$(GTEST_BUILD_DIR)\lib\Release"\
 
-all: $(OUTDIR)\$(TARGET_DLL) $(OUTDIR)\$(TARGET_EXE) $(OUTDIR)\$(TARGET_TEST)
+all: $(OUTDIR)\$(TARGET_DLL) $(OUTDIR)\$(TARGET_SERVER) $(OUTDIR)\$(TARGET_EXE) $(OUTDIR)\$(TARGET_TEST)
 
 $(OUTDIR)\$(TARGET_DLL): $(OBJS_DLL)
 	@if not exist $(OUTDIR) mkdir $(OUTDIR)
@@ -78,6 +90,11 @@ $(OUTDIR)\$(TARGET_DLL): $(OBJS_DLL)
 $(OUTDIR)\$(TARGET_EXE): $(OBJS_EXE)
 	@if not exist $(OUTDIR) mkdir $(OUTDIR)
 	$(LINKER) $(LFLAGS) /SUBSYSTEM:CONSOLE $(LIBS) /PDB:"$(@R).pdb" /OUT:$@ $**
+
+$(OUTDIR)\$(TARGET_SERVER): $(OBJS_SERVER)
+	@if exist $(OUTDIR)\$(TARGET_SERVER) $(OUTDIR)\$(TARGET_SERVER) --stop
+	@if not exist $(OUTDIR) mkdir $(OUTDIR)
+	$(LINKER) $(LFLAGS) /SUBSYSTEM:WINDOWS $(LIBS) /PDB:"$(@R).pdb" /OUT:$@ $**
 
 $(OUTDIR)\$(TARGET_TEST): $(OBJS_TEST)
 	@if not exist $(OUTDIR) mkdir $(OUTDIR)
