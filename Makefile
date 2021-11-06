@@ -20,18 +20,15 @@ RD=rd/s/q
 RM=del/q
 LINKER=link
 TARGET_EXE=t.exe
-TARGET_TEST=tests.exe
 TARGET_SERVER=s.exe
 TARGET_DLL=z.dll
 
 OBJS_EXE=\
 	$(OBJDIR)\main.obj\
-	$(OBJDIR)\shared.obj\
-	$(OBJDIR)\uuids.obj\
-
-OBJS_TEST=\
 	$(OBJDIR)\regutils.obj\
+	$(OBJDIR)\shared.obj\
 	$(OBJDIR)\tests.obj\
+	$(OBJDIR)\uuids.obj\
 
 OBJS_DLL=\
 	$(OBJDIR)\dll.res\
@@ -55,15 +52,12 @@ OBJS_SERVER=\
 
 LIBS=\
 	advapi32.lib\
+	gtest.lib\
+	gtest_main.lib\
 	ole32.lib\
 	shell32.lib\
 	shlwapi.lib\
 	user32.lib\
-
-LIBS_TEST=\
-	advapi32.lib\
-	gtest.lib\
-	gtest_main.lib\
 
 CFLAGS=\
 	/nologo\
@@ -94,7 +88,7 @@ MIDL_FLAGS=\
 	/h interfaces.h\
 	/out $(GENDIR)\
 
-all: $(OUTDIR)\$(TARGET_DLL) $(OUTDIR)\$(TARGET_SERVER) $(OUTDIR)\$(TARGET_EXE) $(OUTDIR)\$(TARGET_TEST)
+all: $(OUTDIR)\$(TARGET_DLL) $(OUTDIR)\$(TARGET_SERVER) $(OUTDIR)\$(TARGET_EXE)
 
 $(OUTDIR)\$(TARGET_DLL): $(OBJS_DLL)
 	@if not exist $(OUTDIR) mkdir $(OUTDIR)
@@ -109,10 +103,6 @@ $(OUTDIR)\$(TARGET_SERVER): $(OBJS_SERVER)
 	@if exist $(OUTDIR)\$(TARGET_SERVER) $(OUTDIR)\$(TARGET_SERVER) --stop
 	@if not exist $(OUTDIR) mkdir $(OUTDIR)
 	$(LINKER) $(LFLAGS) /SUBSYSTEM:WINDOWS $(LIBS) /PDB:"$(@R).pdb" /OUT:$@ $**
-
-$(OUTDIR)\$(TARGET_TEST): $(OBJS_TEST)
-	@if not exist $(OUTDIR) mkdir $(OUTDIR)
-	$(LINKER) $(LFLAGS) /SUBSYSTEM:CONSOLE $(LIBS_TEST) /PDB:"$(@R).pdb" /OUT:$@ $**
 
 {$(SRCDIR)}.cpp{$(OBJDIR)}.obj:
 	@if not exist $(OBJDIR) mkdir $(OBJDIR)

@@ -101,7 +101,7 @@ STDMETHODIMP MainObject::TestNumbers(
     /* [out] */ int *numberOut,
     /* [out][in] */ unsigned long *numberInOut,
     /* [retval][out] */ unsigned int *numberRetval) {
-  Log(L"%S: %lx %lx %x %lx %x\n", __FUNCTION__, numberIn, *pnumberIn,
+  Log(L"%S: %ld %ld %d %ld %u\n", __FUNCTION__, numberIn, *pnumberIn,
       *numberOut, *numberInOut, *numberRetval);
   *pnumberIn = 41;
   *numberOut = 42;

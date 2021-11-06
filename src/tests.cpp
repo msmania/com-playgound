@@ -1,12 +1,7 @@
 #include "regutils.h"
 #include "gtest/gtest.h"
 
-void Log(const wchar_t *format, ...) {
-  va_list v;
-  va_start(v, format);
-  vwprintf(format, v);
-  va_end(v);
-}
+void Log(const wchar_t *format, ...);
 
 TEST(RegUtils, ctor) {
   RegUtil reg;

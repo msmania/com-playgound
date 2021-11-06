@@ -1,5 +1,6 @@
 #include "interfaces.h"
 #include "shared.h"
+#include "gtest/gtest.h"
 #include <atlbase.h>
 #include <cstdarg>
 #include <thread>
@@ -15,31 +16,27 @@ void Log(const wchar_t *format, ...) {
 void TestObject(const std::vector<GUID> &clsIds) {
   CComPtr<IMarshalable> comobj;
   for (const auto &clsId : clsIds) {
-    HRESULT hr = comobj.CoCreateInstance(
-        clsId,
-        /*pUnkOuter*/ nullptr, CLSCTX_LOCAL_SERVER | CLSCTX_INPROC_SERVER);
-    if (FAILED(hr)) {
-      Log(L"CComPtr::CreateInstance failed - %08lx\n", hr);
-      return;
-    }
+    ASSERT_EQ(
+        comobj.CoCreateInstance(clsId,
+                                /*pUnkOuter*/ nullptr,
+                                CLSCTX_LOCAL_SERVER | CLSCTX_INPROC_SERVER),
+        S_OK);
 
-    long a = 0x123;
-    long b = 0x456;
-    int c = 0x789;
-    unsigned long d = 0xabc;
-    unsigned int e = 0xdef;
-    hr = comobj->TestNumbers(a, &b, &c, &d, &e);
-    if (SUCCEEDED(hr)) {
-      Log(L"Received %d %u %u %u\n", b, c, d, e);
-    } else {
-      Log(L"IMarshalable::TestNumbers failed - %08lx\n", hr);
-    }
+    long a = 10;
+    long b = 11;
+    int c = 12;
+    unsigned long d = 13;
+    unsigned int e = 14;
+    ASSERT_EQ(comobj->TestNumbers(a, &b, &c, &d, &e), S_OK);
+    EXPECT_EQ(c, 42);
+    EXPECT_EQ(d, 43lu);
+    EXPECT_EQ(e, 44u);
+    Log(L"Input params: %ld\n", b);
   }
 }
 
-int wmain(int argc, wchar_t *argv[]) {
-  Log(L"\n# Default STA is a legacy STA\n#\n");
-  std::thread t1(ComThread<COINIT_MULTITHREADED>, []() {
+TEST(STA, DefaultLegacy) {
+  std::thread t(ComThread<COINIT_MULTITHREADED>, []() {
     Log(L"The next object is created in the default legacy STA.\n");
     TestObject({kCLSID_ExtZ_InProc_STA});
 
@@ -61,10 +58,11 @@ int wmain(int argc, wchar_t *argv[]) {
     });
     mta.join();
   });
-  t1.join();
+  t.join();
+}
 
-  Log(L"\n# Default STA is a non-legacy STA\n#\n");
-  std::thread t2(ComThread<COINIT_APARTMENTTHREADED>, []() {
+TEST(STA, DefaultNonLegacy) {
+  std::thread t(ComThread<COINIT_APARTMENTTHREADED>, []() {
     TestObject({kCLSID_ExtZ_InProc_STA});
     Log(L"[%04x] The thread has entered a legacy STA.\n",
         ::GetCurrentThreadId());
@@ -83,16 +81,15 @@ int wmain(int argc, wchar_t *argv[]) {
     ThreadMsgWaitForSingleObject(sta1.native_handle(), INFINITE);
     sta1.join();
   });
-  t2.join();
+  t.join();
+}
 
-  Log(L"\n# OutProc objects\n#\n");
-  std::thread t3(ComThread<COINIT_MULTITHREADED>, []() {
+TEST(STA, Outproc) {
+  std::thread t(ComThread<COINIT_MULTITHREADED>, []() {
     TestObject({
         kCLSID_ExtZ_OutProc_STA_1,
         kCLSID_ExtZ_OutProc_STA_2,
     });
   });
-  t3.join();
-
-  return 0;
+  t.join();
 }
