@@ -15,21 +15,17 @@ ServerInfo::ServerInfo(HMODULE module) {
 
 bool ServerInfo::RegisterServer(LPCWSTR clsId, LPCWSTR friendlyName,
                                 LPCWSTR threadModel) const {
-  RegUtil root(HKEY_CURRENT_USER, kUserClassRoot);
-  if (!root) {
-    return false;
-  }
-
-  std::wstring subkey(kDirClsId);
+  std::wstring subkey(kUserClassRoot);
+  subkey += kDirClsId;
   subkey += clsId;
 
-  RegUtil server_test(root, subkey.c_str());
+  RegUtil server_test(HKEY_CURRENT_USER, subkey.c_str());
   if (server_test) {
     // Key already exist.  No override.
     return false;
   }
 
-  RegUtil server(root, subkey.c_str(), /*createIfNotExist*/ true);
+  RegUtil server(HKEY_CURRENT_USER, subkey.c_str(), /*createIfNotExist*/ true);
   if (!server || !server.SetString(nullptr, friendlyName)) {
     UnregisterServer(clsId);
     return false;

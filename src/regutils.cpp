@@ -55,7 +55,7 @@ RegUtil::RegUtil(HKEY root, LPCWSTR subkey, bool createIfNotExist)
   } else {
     LSTATUS ls = ::RegOpenKeyExW(root, subkey,
                                  /*ulOptions*/ 0, KEY_ALL_ACCESS, &mKey);
-    if (ls != ERROR_SUCCESS) {
+    if (ls != ERROR_FILE_NOT_FOUND && ls != ERROR_SUCCESS) {
       Log(L"RegOpenKeyExW failed - %08lx\n", ls);
       return;
     }
