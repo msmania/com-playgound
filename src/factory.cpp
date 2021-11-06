@@ -1,9 +1,9 @@
+#include "interfaces.h"
 #include "regutils.h"
 #include <atlbase.h>
-#include <shlobj.h>
 
 void Log(const wchar_t *format, ...);
-IContextMenu *CreateContextMenuExt();
+IUnknown *CreateMarshalable();
 
 class ClassFactory : public IClassFactory {
   ULONG mRef;
@@ -66,17 +66,20 @@ STDMETHODIMP ClassFactory::CreateInstance(IUnknown *pUnkOuter, REFIID riid,
   }
 
   CComPtr<IUnknown> instance;
-  if (IsEqualCLSID(riid, IID_IContextMenu) ||
-      IsEqualCLSID(riid, IID_IUnknown)) {
-    instance.Attach(CreateContextMenuExt());
-  } else {
+  instance.Attach(CreateMarshalable());
+  if (!instance) {
+    return E_OUTOFMEMORY;
+  }
+
+  HRESULT hr = instance->QueryInterface(riid, ppv);
+  if (hr == E_NOINTERFACE) {
     std::wstring guidStr = RegUtil::GuidToString(riid);
     Log(L"QI: %s\n", guidStr.c_str());
     __debugbreak();
     return E_NOINTERFACE;
   }
 
-  return instance ? instance->QueryInterface(riid, ppv) : E_OUTOFMEMORY;
+  return S_OK;
 }
 
 STDMETHODIMP ClassFactory::LockServer(BOOL fLock) { return S_OK; }

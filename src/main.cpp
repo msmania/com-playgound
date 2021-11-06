@@ -1,7 +1,7 @@
+#include "interfaces.h"
 #include "shared.h"
 #include <atlbase.h>
 #include <cstdarg>
-#include <shlobj.h>
 #include <thread>
 #include <vector>
 
@@ -13,13 +13,26 @@ void Log(const wchar_t *format, ...) {
 }
 
 void TestObject(const std::vector<GUID> &clsIds) {
-  CComPtr<IUnknown> comobj;
+  CComPtr<IMarshalable> comobj;
   for (const auto &clsId : clsIds) {
     HRESULT hr = comobj.CoCreateInstance(
         clsId,
         /*pUnkOuter*/ nullptr, CLSCTX_LOCAL_SERVER | CLSCTX_INPROC_SERVER);
     if (FAILED(hr)) {
       Log(L"CComPtr::CreateInstance failed - %08lx\n", hr);
+      return;
+    }
+
+    long a = 0x123;
+    long b = 0x456;
+    int c = 0x789;
+    unsigned long d = 0xabc;
+    unsigned int e = 0xdef;
+    hr = comobj->TestNumbers(a, &b, &c, &d, &e);
+    if (SUCCEEDED(hr)) {
+      Log(L"Received %d %u %u %u\n", b, c, d, e);
+    } else {
+      Log(L"IMarshalable::TestNumbers failed - %08lx\n", hr);
     }
   }
 }

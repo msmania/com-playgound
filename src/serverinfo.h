@@ -13,7 +13,8 @@ public:
                       LPCWSTR threadModel) const;
   bool UnregisterServer(LPCWSTR clsId) const;
 
-  bool EnableContextMenu(LPCWSTR clsId, bool trueToDisable = false) const;
+  bool RegisterTypelib() const;
+  bool UnregisterTypelib() const;
 
   HRESULT GetClassObject(REFIID riid, void **ppv) const;
 };

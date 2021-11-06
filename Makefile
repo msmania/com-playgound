@@ -10,6 +10,7 @@ ARCH=x86
 
 OUTDIR=bin\$(ARCH)
 OBJDIR=obj\$(ARCH)
+GENDIR=gen\$(ARCH)
 SRCDIR=src
 GTEST_SRC_DIR=D:\src\googletest
 GTEST_BUILD_DIR=D:\src\googletest\build\$(ARCH)
@@ -26,28 +27,31 @@ TARGET_DLL=z.dll
 OBJS_EXE=\
 	$(OBJDIR)\main.obj\
 	$(OBJDIR)\shared.obj\
+	$(OBJDIR)\uuids.obj\
 
 OBJS_TEST=\
 	$(OBJDIR)\regutils.obj\
 	$(OBJDIR)\tests.obj\
 
 OBJS_DLL=\
-	$(OBJDIR)\contextmenu.obj\
 	$(OBJDIR)\dll.res\
 	$(OBJDIR)\dllmain.obj\
 	$(OBJDIR)\factory.obj\
+	$(OBJDIR)\marshalable.obj\
 	$(OBJDIR)\regutils.obj\
 	$(OBJDIR)\serverinfo.obj\
 	$(OBJDIR)\shared.obj\
+	$(OBJDIR)\uuids.obj\
 
 OBJS_SERVER=\
-	$(OBJDIR)\contextmenu.obj\
 	$(OBJDIR)\exe.res\
 	$(OBJDIR)\factory.obj\
+	$(OBJDIR)\marshalable.obj\
 	$(OBJDIR)\regutils.obj\
 	$(OBJDIR)\serverinfo.obj\
 	$(OBJDIR)\servermain.obj\
 	$(OBJDIR)\shared.obj\
+	$(OBJDIR)\uuids.obj\
 
 LIBS=\
 	advapi32.lib\
@@ -72,6 +76,7 @@ CFLAGS=\
 	/EHsc\
 	/Fo"$(OBJDIR)\\"\
 	/Fd"$(OBJDIR)\\"\
+	/I"$(GENDIR)"\
 	/I"$(GTEST_SRC_DIR)\googletest\include"\
 	/I"$(GTEST_SRC_DIR)\googlemock\include"\
 
@@ -79,6 +84,15 @@ LFLAGS=\
 	/NOLOGO\
 	/DEBUG\
 	/LIBPATH:"$(GTEST_BUILD_DIR)\lib\Release"\
+
+MIDL_FLAGS=\
+	/nologo\
+	/define_guids\
+	/dlldata unused_dlldata.c\
+	/proxy unused_proxy.c\
+	/iid uuids.c\
+	/h interfaces.h\
+	/out $(GENDIR)\
 
 all: $(OUTDIR)\$(TARGET_DLL) $(OUTDIR)\$(TARGET_SERVER) $(OUTDIR)\$(TARGET_EXE) $(OUTDIR)\$(TARGET_TEST)
 
@@ -104,12 +118,26 @@ $(OUTDIR)\$(TARGET_TEST): $(OBJS_TEST)
 	@if not exist $(OBJDIR) mkdir $(OBJDIR)
 	$(CC) $(CFLAGS) $<
 
+{$(GENDIR)}.c{$(OBJDIR)}.obj:
+	@if not exist $(OBJDIR) mkdir $(OBJDIR)
+	$(CC) $(CFLAGS) $<
+
 {$(SRCDIR)}.rc{$(OBJDIR)}.res:
 	@if not exist $(OBJDIR) mkdir $(OBJDIR)
-	rc /nologo /fo "$@" $<
+	rc /d $(ARCH) /nologo /fo "$@" $<
+
+$(SRCDIR)\marshalable.cpp: $(GENDIR)\interfaces.h
+
+$(SRCDIR)\dll.rc: $(GENDIR)\interfaces.h
+$(SRCDIR)\exe.rc: $(GENDIR)\interfaces.h
+
+$(GENDIR)\interfaces.h: $(SRCDIR)\interfaces.idl
+	@if not exist $(GENDIR) mkdir $(GENDIR)
+	midl $(MIDL_FLAGS) $?
 
 clean:
 	@if exist $(OBJDIR) $(RD) $(OBJDIR)
+	@if exist $(GENDIR) $(RD) $(GENDIR)
 	@if exist $(OUTDIR)\$(TARGET) $(RM) $(OUTDIR)\$(TARGET)
 	@if exist $(OUTDIR)\$(TARGET:exe=ilk) $(RM) $(OUTDIR)\$(TARGET:exe=ilk)
 	@if exist $(OUTDIR)\$(TARGET:exe=pdb) $(RM) $(OUTDIR)\$(TARGET:exe=pdb)

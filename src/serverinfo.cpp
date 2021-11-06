@@ -1,11 +1,14 @@
 #include "serverinfo.h"
+#include "interfaces.h"
 #include "regutils.h"
 #include <atlbase.h>
 
 const wchar_t kUserClassRoot[] = L"Software\\Classes\\";
 const wchar_t kDirClsId[] = L"CLSID\\";
-const wchar_t kContextMenuHandlers[] = L".zzz\\shellex\\ContextMenuHandlers\\";
+const wchar_t kDirTypelib[] = L"Typelib\\";
 IUnknown *CreateFactory();
+
+void Log(const wchar_t *format, ...);
 
 ServerInfo::ServerInfo(HMODULE module) {
   if (!::GetModuleFileNameW(module, mModulePath, ARRAYSIZE(mModulePath))) {
@@ -60,22 +63,42 @@ bool ServerInfo::UnregisterServer(LPCWSTR clsId) const {
   return true;
 }
 
-bool ServerInfo::EnableContextMenu(LPCWSTR clsId, bool trueToDisable) const {
-  std::wstring subkey(kUserClassRoot);
-  subkey += kContextMenuHandlers;
-  subkey += clsId;
-
-  if (trueToDisable) {
-    LSTATUS ls = ::RegDeleteTreeW(HKEY_CURRENT_USER, subkey.c_str());
-    return ls == ERROR_SUCCESS || ls == ERROR_FILE_NOT_FOUND;
-  }
-
-  RegUtil handlers(HKEY_CURRENT_USER, subkey.c_str(),
-                   /*createIfNotExist*/ true);
-  if (!handlers || !handlers.SetString(nullptr, clsId)) {
+bool ServerInfo::RegisterTypelib() const {
+  CComPtr<ITypeLib> tlb;
+  HRESULT hr = ::LoadTypeLib(mModulePath, &tlb);
+  if (FAILED(hr)) {
+    Log(L"LoadTypeLib failed - %08lx\n", hr);
     return false;
   }
 
+  CComBSTR copied(mModulePath);
+  hr = ::RegisterTypeLibForUser(tlb, copied, nullptr);
+  if (FAILED(hr)) {
+    Log(L"RegisterTypeLibForUser failed - %08lx\n", hr);
+    return false;
+  }
+  return true;
+}
+
+bool ServerInfo::UnregisterTypelib() const {
+  std::wstring subkey(kUserClassRoot);
+  subkey += kDirTypelib;
+  subkey += RegUtil::GuidToString(LIBID_COM_Playground);
+  RegUtil typelib_test(HKEY_CURRENT_USER, subkey.c_str());
+  if (!typelib_test) {
+    return true;
+  }
+
+#ifdef _WIN64
+  constexpr SYSKIND sys = SYS_WIN64;
+#else
+  constexpr SYSKIND sys = SYS_WIN32;
+#endif
+  HRESULT hr = ::UnRegisterTypeLibForUser(LIBID_COM_Playground, 1, 0, 0, sys);
+  if (FAILED(hr)) {
+    Log(L"UnRegisterTypeLibForUser failed - %08lx\n", hr);
+    return false;
+  }
   return true;
 }
 
@@ -108,6 +131,16 @@ bool RegisterAllServers(const ServerInfo *si,
       // Stop registering servers
       ok = false;
       break;
+    }
+  }
+
+  if (trueToUnregister) {
+    if (!si->UnregisterTypelib()) {
+      ok = false;
+    }
+  } else {
+    if (!si->RegisterTypelib()) {
+      ok = false;
     }
   }
 

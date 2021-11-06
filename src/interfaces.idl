@@ -1,0 +1,26 @@
+import "unknwn.idl";
+
+// https://docs.microsoft.com/en-us/windows/win32/com/interface-marshaling
+// Interfaces must be Automation-compatible (either oleautomation or dual),
+// to use Interface Marshaling
+[
+  uuid(b2137105-d2ea-422c-9e89-3b02645d2078),
+  version(1.0),
+  helpstring("COM_Playground type library")
+] library COM_Playground {
+  importlib("stdole2.tlb");
+
+  [
+    object,
+    dual,
+    uuid(c981d429-dd12-4e4c-b23c-a53172fcaede),
+    helpstring("IMarshalable interface")
+  ] interface IMarshalable : IDispatch {
+    HRESULT TestNumbers(
+      [in] long numberIn,
+      [in] long* pnumberIn,
+      [out] int* numberOut,
+      [in, out] unsigned long* numberInOut,
+      [out, retval] unsigned int* numberRetval);
+  };
+};
