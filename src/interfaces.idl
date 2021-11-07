@@ -23,4 +23,26 @@ import "unknwn.idl";
       [in, out] unsigned long* numberInOut,
       [out, retval] unsigned int* numberRetval);
   };
+
+  [
+    object,
+    uuid(06c56a36-5f16-4580-9a48-a6b828681d4a),
+    helpstring("IMarshalable_NoDual interface")
+  ] interface IMarshalable_NoDual : IUnknown {
+    HRESULT TestNumbers_NoDual();
+  };
+
+  [
+    object,
+    oleautomation,
+    uuid(aac80615-1103-4539-a5b0-02b6440cd1cc),
+    helpstring("IMarshalable_OleAuto interface")
+  ] interface IMarshalable_OleAuto : IUnknown {
+    HRESULT TestNumbers_OleAuto(
+      [in] long numberIn,
+      [in] long* pnumberIn,
+      [out] int* numberOut,
+      [in, out] unsigned long* numberInOut,
+      [out, retval] unsigned int* numberRetval);
+  };
 };

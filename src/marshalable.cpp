@@ -6,7 +6,9 @@
 
 void Log(const wchar_t *format, ...);
 
-class MainObject : public IMarshalable {
+class MainObject : public IMarshalable,
+                   public IMarshalable_NoDual,
+                   public IMarshalable_OleAuto {
   ULONG mRef;
 
 public:
@@ -34,6 +36,23 @@ public:
       /* [out] */ int *numberOut,
       /* [out][in] */ unsigned long *numberInOut,
       /* [retval][out] */ unsigned int *numberRetval);
+
+  // IMarshalable_NoDual
+  IFACEMETHODIMP TestNumbers_NoDual() {
+    assert(0);
+    return E_NOTIMPL;
+  }
+
+  // IMarshalable_OleAuto
+  IFACEMETHODIMP TestNumbers_OleAuto(
+      /* [in] */ long numberIn,
+      /* [in] */ long *pnumberIn,
+      /* [out] */ int *numberOut,
+      /* [out][in] */ unsigned long *numberInOut,
+      /* [retval][out] */ unsigned int *numberRetval) {
+    return TestNumbers(numberIn, pnumberIn, numberOut, numberInOut,
+                       numberRetval);
+  }
 };
 
 MainObject::MainObject() : mRef(1) {
@@ -43,6 +62,8 @@ MainObject::MainObject() : mRef(1) {
 STDMETHODIMP MainObject::QueryInterface(REFIID riid, void **ppv) {
   const QITAB QITable[] = {
       QITABENT(MainObject, IMarshalable),
+      QITABENT(MainObject, IMarshalable_NoDual),
+      QITABENT(MainObject, IMarshalable_OleAuto),
       {0},
   };
 

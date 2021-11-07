@@ -93,3 +93,32 @@ TEST(STA, Outproc) {
   });
   t.join();
 }
+
+TEST(STA, Dual) {
+  std::thread t(ComThread<COINIT_MULTITHREADED>, []() {
+    CComPtr<IUnknown> comobj;
+    ASSERT_EQ(comobj.CoCreateInstance(kCLSID_ExtZ_InProc_STA,
+                                      /*pUnkOuter*/ nullptr,
+                                      CLSCTX_INPROC_SERVER),
+              S_OK);
+
+    long a = 10;
+    long b = 11;
+    int c = 12;
+    unsigned long d = 13;
+    unsigned int e = 14;
+
+    CComQIPtr<IMarshalable> dual = comobj;
+    ASSERT_TRUE(dual);
+    EXPECT_EQ(dual->TestNumbers(a, &b, &c, &d, &e), S_OK);
+
+    CComPtr<IMarshalable_NoDual> nodual;
+    EXPECT_EQ(comobj.QueryInterface(&nodual), E_FAIL);
+
+    CComPtr<IMarshalable_OleAuto> oleauto;
+    EXPECT_EQ(comobj.QueryInterface(&oleauto), S_OK);
+    d = 13;
+    EXPECT_EQ(oleauto->TestNumbers_OleAuto(a, &b, &c, &d, &e), S_OK);
+  });
+  t.join();
+}
