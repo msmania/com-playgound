@@ -37,6 +37,16 @@ public:
       /* [out][in] */ unsigned long *numberInOut,
       /* [retval][out] */ unsigned int *numberRetval);
 
+  IFACEMETHODIMP TestWideStrings(
+      /* [string][in] */ wchar_t *strIn,
+      /* [string][out][in] */ wchar_t *strInOut,
+      /* [string][out] */ wchar_t **strOut);
+
+  IFACEMETHODIMP TestBStrings(
+      /* [in] */ BSTR strIn,
+      /* [out] */ BSTR *strOut,
+      /* [out][in] */ BSTR *strInOut);
+
   // IMarshalable_NoDual
   IFACEMETHODIMP TestNumbers_NoDual() {
     assert(0);
@@ -128,6 +138,45 @@ STDMETHODIMP MainObject::TestNumbers(
   *numberOut = 42;
   *numberInOut = 43;
   *numberRetval = 44;
+  return S_OK;
+}
+
+static const std::wstring kResponse(L":)\0 <invisible>");
+
+STDMETHODIMP MainObject::TestWideStrings(
+    /* [string][in] */ wchar_t *strIn,
+    /* [string][out][in] */ wchar_t *strInOut,
+    /* [string][out] */ wchar_t **strOut) {
+  if (*strOut) {
+    return E_POINTER;
+  }
+
+  Log(L"%S: %s %s\n", __FUNCTION__, strIn, strInOut);
+  strIn[0] = strInOut[0] = L'@';
+
+  wchar_t *buf = reinterpret_cast<wchar_t *>(::CoTaskMemAlloc(100));
+  Log(L"  Allocated buffer: %p\n", buf);
+  kResponse.copy(buf, kResponse.size());
+  buf[kResponse.size()] = 0;
+  *strOut = buf;
+
+  return S_OK;
+}
+
+STDMETHODIMP MainObject::TestBStrings(
+    /* [in] */ BSTR strIn,
+    /* [out] */ BSTR *strOut,
+    /* [out][in] */ BSTR *strInOut) {
+  if (*strOut) {
+    return E_POINTER;
+  }
+
+  Log(L"%S: %s %s\n", __FUNCTION__, strIn, *strInOut);
+  strIn[0] = (*strInOut)[0] = L'@';
+
+  CComBSTR buf2(kResponse.c_str());
+  *strOut = buf2.Detach();
+
   return S_OK;
 }
 

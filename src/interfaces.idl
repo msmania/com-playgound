@@ -22,6 +22,16 @@ import "unknwn.idl";
       [out] int* numberOut,
       [in, out] unsigned long* numberInOut,
       [out, retval] unsigned int* numberRetval);
+
+    HRESULT TestWideStrings(
+      [in, string] wchar_t* strIn,
+      [in, out, string] wchar_t* strInOut,
+      [out, string] wchar_t** strOut);
+
+    HRESULT TestBStrings(
+      [in] BSTR strIn,
+      [out] BSTR* strOut,
+      [in, out] BSTR* strInOut);
   };
 
   [

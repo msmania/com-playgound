@@ -122,3 +122,39 @@ TEST(STA, Dual) {
   });
   t.join();
 }
+
+TEST(STA, Strings) {
+  std::thread t(ComThread<COINIT_APARTMENTTHREADED>, []() {
+    CComPtr<IMarshalable> comobj;
+    ASSERT_EQ(comobj.CoCreateInstance(kCLSID_ExtZ_OutProc_STA_1,
+                                      /*pUnkOuter*/ nullptr,
+                                      CLSCTX_LOCAL_SERVER),
+              S_OK);
+
+    wchar_t on_stack1[] = L"Hello!\0 <invisible>";
+    wchar_t on_stack2[] = L"World!\0 <invisible>";
+
+    std::unique_ptr<wchar_t[]> on_heap(new wchar_t[100]);
+    memcpy(on_heap.get(), on_stack2, sizeof(on_stack2));
+
+    wchar_t *received = on_stack2;
+    EXPECT_EQ(comobj->TestWideStrings(on_stack1, on_heap.get(), &received),
+              S_OK);
+    EXPECT_STREQ(on_stack1, L"Hello!\0 <HiddenPart>");
+    EXPECT_STREQ(on_stack2, L"World!\0 <HiddenPart>");
+    EXPECT_STREQ(on_heap.get(), L"@orld!");
+
+    Log(L"Received buffer: %p\n", received);
+    EXPECT_STREQ(received, L":)");
+    ::CoTaskMemFree(received);
+
+    CComBSTR bstrIn(on_stack1);
+    CComBSTR bstrInOut(on_stack2);
+    CComBSTR bstrOut;
+    EXPECT_EQ(comobj->TestBStrings(bstrIn, &bstrOut, &bstrInOut), S_OK);
+    EXPECT_STREQ(bstrIn, on_stack1);
+    EXPECT_STREQ(bstrOut, L":)");
+    EXPECT_STREQ(bstrInOut, L"@orld!");
+  });
+  t.join();
+}
