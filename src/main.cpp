@@ -13,6 +13,22 @@ void Log(const wchar_t *format, ...) {
   va_end(v);
 }
 
+void TestTestNumbers(IMarshalable *raw) {
+  CComPtr<IMarshalable> comobj(raw);
+  long a = 10;
+  long b = 11;
+  int c = 12;
+  unsigned long d = 13;
+  unsigned int e = 14;
+  ASSERT_EQ(comobj->TestNumbers(a, &b, &c, &d, &e), S_OK);
+  EXPECT_EQ(c, 42);
+  EXPECT_EQ(d, 43lu);
+  EXPECT_EQ(e, 44u);
+  if (b != 11) {
+    Log(L"Input param was changed to %ld\n", b);
+  }
+}
+
 void TestObject(const std::vector<GUID> &clsIds) {
   CComPtr<IMarshalable> comobj;
   for (const auto &clsId : clsIds) {
@@ -21,17 +37,7 @@ void TestObject(const std::vector<GUID> &clsIds) {
                                 /*pUnkOuter*/ nullptr,
                                 CLSCTX_LOCAL_SERVER | CLSCTX_INPROC_SERVER),
         S_OK);
-
-    long a = 10;
-    long b = 11;
-    int c = 12;
-    unsigned long d = 13;
-    unsigned int e = 14;
-    ASSERT_EQ(comobj->TestNumbers(a, &b, &c, &d, &e), S_OK);
-    EXPECT_EQ(c, 42);
-    EXPECT_EQ(d, 43lu);
-    EXPECT_EQ(e, 44u);
-    Log(L"Input params: %ld\n", b);
+    TestTestNumbers(comobj);
   }
 }
 
@@ -155,6 +161,32 @@ TEST(STA, Strings) {
     EXPECT_STREQ(bstrIn, on_stack1);
     EXPECT_STREQ(bstrOut, L":)");
     EXPECT_STREQ(bstrInOut, L"@orld!");
+  });
+  t.join();
+}
+
+TEST(STA, ProxyTransfer) {
+  std::thread t(ComThread<COINIT_MULTITHREADED>, []() {
+    CComPtr<IMarshalable> outproc1, outproc2, inproc;
+    ASSERT_EQ(outproc1.CoCreateInstance(kCLSID_ExtZ_OutProc_STA_1,
+                                        /*pUnkOuter*/ nullptr,
+                                        CLSCTX_LOCAL_SERVER),
+              S_OK);
+    ASSERT_EQ(outproc2.CoCreateInstance(kCLSID_ExtZ_OutProc_STA_2,
+                                        /*pUnkOuter*/ nullptr,
+                                        CLSCTX_LOCAL_SERVER),
+              S_OK);
+    ASSERT_EQ(inproc.CoCreateInstance(kCLSID_ExtZ_InProc_STA,
+                                      /*pUnkOuter*/ nullptr,
+                                      CLSCTX_INPROC_SERVER),
+              S_OK);
+
+    CComPtr<IMarshalable> outproc1_new, inproc_new;
+    EXPECT_EQ(outproc1->DelegateCall(&outproc1_new), S_OK);
+    EXPECT_EQ(inproc->DelegateCall(&inproc_new), S_OK);
+    TestTestNumbers(outproc1_new);
+    EXPECT_EQ(outproc2->DelegateCall(&inproc_new), S_OK);
+    EXPECT_EQ(inproc->DelegateCall(&outproc1_new), S_OK);
   });
   t.join();
 }

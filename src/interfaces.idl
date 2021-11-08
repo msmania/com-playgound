@@ -32,6 +32,8 @@ import "unknwn.idl";
       [in] BSTR strIn,
       [out] BSTR* strOut,
       [in, out] BSTR* strInOut);
+
+    HRESULT DelegateCall([in, out] IMarshalable** objectInOut);
   };
 
   [

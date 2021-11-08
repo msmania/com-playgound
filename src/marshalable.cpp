@@ -47,6 +47,9 @@ public:
       /* [out] */ BSTR *strOut,
       /* [out][in] */ BSTR *strInOut);
 
+  IFACEMETHODIMP DelegateCall(
+      /* [out][in] */ IMarshalable **objectInOut);
+
   // IMarshalable_NoDual
   IFACEMETHODIMP TestNumbers_NoDual() {
     assert(0);
@@ -132,8 +135,8 @@ STDMETHODIMP MainObject::TestNumbers(
     /* [out] */ int *numberOut,
     /* [out][in] */ unsigned long *numberInOut,
     /* [retval][out] */ unsigned int *numberRetval) {
-  Log(L"%S: %ld %ld %d %ld %u\n", __FUNCTION__, numberIn, *pnumberIn,
-      *numberOut, *numberInOut, *numberRetval);
+  Log(L"[%04x] %S: %ld %ld %d %ld %u\n", ::GetCurrentThreadId(), __FUNCTION__,
+      numberIn, *pnumberIn, *numberOut, *numberInOut, *numberRetval);
   *pnumberIn = 41;
   *numberOut = 42;
   *numberInOut = 43;
@@ -178,6 +181,21 @@ STDMETHODIMP MainObject::TestBStrings(
   *strOut = buf2.Detach();
 
   return S_OK;
+}
+
+STDMETHODIMP MainObject::DelegateCall(
+    /* [out][in] */ IMarshalable **objectInOut) {
+  if (!*objectInOut) {
+    *objectInOut = new MainObject;
+    return *objectInOut ? S_OK : E_OUTOFMEMORY;
+  }
+
+  CComPtr<IMarshalable> target(*objectInOut);
+  long a = 101;
+  int b;
+  unsigned long c = 102;
+  unsigned int d;
+  return target->TestNumbers(100, &a, &b, &c, &d);
 }
 
 IUnknown *CreateMarshalable() {
