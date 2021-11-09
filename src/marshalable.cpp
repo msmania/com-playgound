@@ -144,7 +144,8 @@ STDMETHODIMP MainObject::TestNumbers(
   return S_OK;
 }
 
-static const std::wstring kResponse(L":)\0 <invisible>");
+static const wchar_t kOutput[] = L":)\u0000:)\u0000:)";
+constexpr size_t kOnputCch = sizeof(kOutput) / sizeof(wchar_t) - 1;
 
 STDMETHODIMP MainObject::TestWideStrings(
     /* [string][in] */ wchar_t *strIn,
@@ -155,12 +156,12 @@ STDMETHODIMP MainObject::TestWideStrings(
   }
 
   Log(L"%S: %s %s\n", __FUNCTION__, strIn, strInOut);
-  strIn[0] = strInOut[0] = L'@';
+  memcpy(strIn, kOutput, sizeof(kOutput));
+  memcpy(strInOut, kOutput, sizeof(kOutput));
 
-  wchar_t *buf = reinterpret_cast<wchar_t *>(::CoTaskMemAlloc(100));
+  wchar_t *buf = reinterpret_cast<wchar_t *>(::CoTaskMemAlloc(sizeof(kOutput)));
   Log(L"  Allocated buffer: %p\n", buf);
-  kResponse.copy(buf, kResponse.size());
-  buf[kResponse.size()] = 0;
+  memcpy(buf, kOutput, sizeof(kOutput));
   *strOut = buf;
 
   return S_OK;
@@ -175,10 +176,11 @@ STDMETHODIMP MainObject::TestBStrings(
   }
 
   Log(L"%S: %s %s\n", __FUNCTION__, strIn, *strInOut);
-  strIn[0] = (*strInOut)[0] = L'@';
+  strIn[0] = L'@';
+  ::SysReAllocStringLen(strInOut, kOutput, kOnputCch);
 
-  CComBSTR buf2(kResponse.c_str());
-  *strOut = buf2.Detach();
+  CComBSTR bstr(kOnputCch, kOutput);
+  *strOut = bstr.Detach();
 
   return S_OK;
 }

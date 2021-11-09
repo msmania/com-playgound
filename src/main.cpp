@@ -131,36 +131,60 @@ TEST(STA, Dual) {
 
 TEST(STA, Strings) {
   std::thread t(ComThread<COINIT_APARTMENTTHREADED>, []() {
+    static const wchar_t kPart[] = L"0123456789";
+    static const wchar_t kOutputPart[] = L":)";
+    static const wchar_t kOutput[] = L":)\u0000:)\u0000:)";
+    constexpr size_t kInputLen = sizeof(kPart) * 2;
+    constexpr size_t kInputCch = kInputLen / sizeof(wchar_t) - 1;
+    constexpr size_t kOutputCch = sizeof(kOutput) / sizeof(wchar_t) - 1;
+    std::unique_ptr<uint8_t[]> inputStr(new uint8_t[kInputLen]);
+    memset(inputStr.get(), 0, kInputLen);
+    memcpy(inputStr.get(), kPart, sizeof(kPart));
+    memcpy(inputStr.get() + sizeof(kPart), kPart, sizeof(kPart));
+
     CComPtr<IMarshalable> comobj;
     ASSERT_EQ(comobj.CoCreateInstance(kCLSID_ExtZ_OutProc_STA_1,
                                       /*pUnkOuter*/ nullptr,
                                       CLSCTX_LOCAL_SERVER),
               S_OK);
 
-    wchar_t on_stack1[] = L"Hello!\0 <invisible>";
-    wchar_t on_stack2[] = L"World!\0 <invisible>";
-
-    std::unique_ptr<wchar_t[]> on_heap(new wchar_t[100]);
-    memcpy(on_heap.get(), on_stack2, sizeof(on_stack2));
-
-    wchar_t *received = on_stack2;
-    EXPECT_EQ(comobj->TestWideStrings(on_stack1, on_heap.get(), &received),
+    std::unique_ptr<uint8_t[]> copied1(new uint8_t[kInputLen]);
+    std::unique_ptr<uint8_t[]> copied2(new uint8_t[kInputLen]);
+    memcpy(copied1.get(), inputStr.get(), kInputLen);
+    memcpy(copied2.get(), inputStr.get(), kInputLen);
+    wchar_t *received;
+    EXPECT_EQ(comobj->TestWideStrings(
+                  reinterpret_cast<wchar_t *>(copied1.get()),
+                  reinterpret_cast<wchar_t *>(copied2.get()), &received),
               S_OK);
-    EXPECT_STREQ(on_stack1, L"Hello!\0 <HiddenPart>");
-    EXPECT_STREQ(on_stack2, L"World!\0 <HiddenPart>");
-    EXPECT_STREQ(on_heap.get(), L"@orld!");
+    // [in]string is not modified
+    EXPECT_STREQ(reinterpret_cast<const wchar_t *>(copied1.get()), kPart);
+    // [in,out]string is modified with a shorter string
+    EXPECT_STREQ(reinterpret_cast<const wchar_t *>(copied2.get()), kOutputPart);
+    // The remaining part of [in,out]string is not modified
+    EXPECT_STREQ(
+        reinterpret_cast<const wchar_t *>(copied2.get() + sizeof(kOutputPart)),
+        kPart + sizeof(kOutputPart) / sizeof(wchar_t));
 
+    // The received buffer is different from the one allocated in
+    // comobj's apartment.
     Log(L"Received buffer: %p\n", received);
-    EXPECT_STREQ(received, L":)");
+    EXPECT_STREQ(received, kOutputPart);
     ::CoTaskMemFree(received);
 
-    CComBSTR bstrIn(on_stack1);
-    CComBSTR bstrInOut(on_stack2);
+    CComBSTR bstrIn(kInputCch, reinterpret_cast<wchar_t *>(inputStr.get()));
+    CComBSTR bstrInOut(bstrIn);
     CComBSTR bstrOut;
     EXPECT_EQ(comobj->TestBStrings(bstrIn, &bstrOut, &bstrInOut), S_OK);
-    EXPECT_STREQ(bstrIn, on_stack1);
-    EXPECT_STREQ(bstrOut, L":)");
-    EXPECT_STREQ(bstrInOut, L"@orld!");
+
+    // [in]string is not modified
+    EXPECT_STREQ(bstrIn, kPart);
+
+    // BSTR can carry bytes after a null character unlike a C string
+    EXPECT_EQ(::SysStringLen(bstrInOut), kOutputCch);
+    EXPECT_EQ(::SysStringLen(bstrOut), kOutputCch);
+    EXPECT_EQ(memcmp(bstrInOut, kOutput, sizeof(kOutput)), 0);
+    EXPECT_EQ(memcmp(bstrOut, kOutput, sizeof(kOutput)), 0);
   });
   t.join();
 }
