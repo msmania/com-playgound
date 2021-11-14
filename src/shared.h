@@ -28,7 +28,8 @@ const GUID kCLSID_ExtZ_OutProc_STA_2 = {
     0x4d80,
     {0x9c, 0xb6, 0xfd, 0x34, 0x5f, 0xf5, 0xa0, 0xcc}};
 
-template <DWORD CoInit> void ComThread(const std::function<void()> &func) {
+template <DWORD CoInit, typename Runnable = std::function<void()>>
+void ComThread(Runnable&& func) {
   HRESULT hr = ::CoInitializeEx(nullptr, CoInit);
   if (FAILED(hr)) {
     Log(L"CoInitializeEx failed - %08lx\n", hr);

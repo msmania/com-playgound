@@ -91,10 +91,16 @@ STDMETHODIMP MainObject::QueryInterface(REFIID riid, void **ppv) {
 }
 
 STDMETHODIMP_(ULONG) MainObject::AddRef() {
+#ifdef DEBUG_REF
+  Log(L"%p: %u -> %u\n", this, mRef, mRef + 1);
+#endif
   return ::InterlockedIncrement(&mRef);
 }
 
 STDMETHODIMP_(ULONG) MainObject::Release() {
+#ifdef DEBUG_REF
+  Log(L"%p: %u -> %u\n", this, mRef, mRef - 1);
+#endif
   auto cref = ::InterlockedDecrement(&mRef);
   if (cref == 0) {
     Log(L"Destroying MainObject %p\n", this);

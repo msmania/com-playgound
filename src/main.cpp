@@ -214,3 +214,289 @@ TEST(STA, ProxyTransfer) {
   });
   t.join();
 }
+
+template <typename T> class Marshaler final {
+  CComPtr<IStream> mStream;
+
+  void Release() {
+    if (!mStream) {
+      return;
+    }
+
+    // CoReleaseMarshalData also reads data from the stream.
+    // Need to set the stream position.
+    HRESULT hr = mStream->Seek({}, STREAM_SEEK_SET, nullptr);
+    if (FAILED(hr)) {
+      Log(L"IStream::Seek failed - %08lx\n", hr);
+    }
+
+    hr = ::CoReleaseMarshalData(mStream);
+    if (FAILED(hr)) {
+      Log(L"CoReleaseMarshalData failed - %08lx\n", hr);
+    }
+
+    mStream = nullptr;
+  }
+
+public:
+  Marshaler(T *source) {
+    if (!source) {
+      return;
+    }
+
+    CComPtr<IStream> stream;
+    HRESULT hr = ::CreateStreamOnHGlobal(
+        /*hGlobal*/ nullptr,
+        /*fDeleteOnRelease*/ TRUE, &stream);
+    if (FAILED(hr)) {
+      Log(L"CreateStreamOnHGlobal failed - %08lx\n", hr);
+      return;
+    }
+
+    hr = ::CoMarshalInterface(stream, __uuidof(T), source, MSHCTX_INPROC,
+                              /*pvDestContext*/ nullptr, MSHLFLAGS_NORMAL);
+    if (FAILED(hr)) {
+      Log(L"CoMarshalInterface failed - %08lx\n", hr);
+      return;
+    }
+
+    mStream.Attach(stream.Detach());
+  }
+
+  Marshaler(const Marshaler &other) = delete;
+  Marshaler &operator=(const Marshaler &) = delete;
+
+  Marshaler(Marshaler &&other) { mStream.Attach(other.mStream.Detach()); }
+  Marshaler &operator=(Marshaler &&other) {
+    if (this != &other) {
+      // Calling IStream::Release is not enough to release the stream
+      Release();
+      mStream.Attach(other.mStream.Detach());
+    }
+    return *this;
+  }
+
+  ~Marshaler() { Release(); }
+
+  constexpr operator bool() const { return mStream; }
+
+  void Examine() const {
+    if (!mStream) {
+      return;
+    }
+
+    HGLOBAL memBlock;
+    HRESULT hr = ::GetHGlobalFromStream(mStream, &memBlock);
+    if (FAILED(hr)) {
+      Log(L"GetHGlobalFromStream failed - %08lx\n", hr);
+      return;
+    }
+
+    SIZE_T size = ::GlobalSize(memBlock);
+    uint8_t *raw = reinterpret_cast<uint8_t *>(::GlobalLock(memBlock));
+    if (!raw) {
+      Log(L"GlobalSize failed - %08lx\n", ::GetLastError());
+      return;
+    }
+
+    Log(L"%p (%d bytes)\n", raw, size);
+    for (SIZE_T i = 0; i < size; ++i) {
+      if ((i + 1) % 16 == 0 || i == size - 1) {
+        Log(L" %02x\n", raw[i]);
+      } else {
+        Log(L" %02x", raw[i]);
+      }
+    }
+
+    if (::GlobalUnlock(memBlock) > 0) {
+      Log(L"Failed to unlock the memory block failed\n");
+      return;
+    }
+
+    DWORD gle = ::GetLastError();
+    if (gle != NO_ERROR) {
+      Log(L"Failed to unlock the memory block failed - %08lx\n", gle);
+      return;
+    }
+  }
+
+  CComPtr<T> Unmarshal() {
+    if (!mStream) {
+      return nullptr;
+    }
+
+    HRESULT hr = mStream->Seek({}, STREAM_SEEK_SET, nullptr);
+    if (FAILED(hr)) {
+      Log(L"IStream::Seek failed - %08lx\n", hr);
+      return nullptr;
+    }
+
+    T *raw = nullptr;
+    hr = ::CoUnmarshalInterface(mStream, __uuidof(T),
+                                reinterpret_cast<void **>(&raw));
+    if (FAILED(hr)) {
+      Log(L"CoUnmarshalInterface failed - %08lx\n", hr);
+      return nullptr;
+    }
+
+    mStream = nullptr; // one-time marshaling
+
+    CComPtr<T> proxy;
+    proxy.Attach(raw); // CoMarshalInterface already addref'ed the object
+    return proxy;
+  }
+};
+
+TEST(STA, StreamMarshaling) {
+  std::thread t1(ComThread<COINIT_APARTMENTTHREADED>, []() {
+    CComPtr<IMarshalable> comobj;
+    ASSERT_EQ(comobj.CoCreateInstance(kCLSID_ExtZ_InProc_STA,
+                                      /*pUnkOuter*/ nullptr,
+                                      CLSCTX_INPROC_SERVER),
+              S_OK);
+
+    Marshaler<IMarshalable> marsh1(comobj), marsh2(comobj);
+    Marshaler<IUnknown> marsh_unk(comobj);
+
+    CComQIPtr<IMarshalable_NoDual> qi = comobj;
+    Marshaler<IMarshalable_NoDual> unmarshalable(qi);
+
+    comobj = nullptr;
+    qi = nullptr;
+
+    ASSERT_TRUE(marsh1);
+    ASSERT_TRUE(marsh2);
+    ASSERT_TRUE(marsh_unk);
+    ASSERT_TRUE(unmarshalable);
+    marsh1.Examine();
+    marsh2.Examine();
+    marsh_unk.Examine();
+    unmarshalable.Examine();
+
+    std::thread t2([marsh1 = std::move(marsh1), marsh2 = std::move(marsh2),
+                    marsh_unk = std::move(marsh_unk),
+                    unmarshalable = std::move(unmarshalable)]() mutable {
+      ComThread<COINIT_APARTMENTTHREADED>(
+          [marsh1 = std::move(marsh1), marsh2 = std::move(marsh2),
+           marsh_unk = std::move(marsh_unk),
+           unmarshalable = std::move(unmarshalable)]() mutable {
+            CComPtr proxy1(marsh1.Unmarshal());
+            CComPtr proxy2(marsh2.Unmarshal());
+            CComPtr proxy3(marsh_unk.Unmarshal());
+            ASSERT_TRUE(proxy1);
+            EXPECT_TRUE(proxy2);
+            ASSERT_TRUE(proxy3);
+            TestTestNumbers(proxy1);
+            TestTestNumbers(CComQIPtr<IMarshalable>(proxy3));
+
+            proxy1 = nullptr;
+            proxy3 = nullptr;
+
+            // CoUnmarshalInterface will fail with E_FAIL
+            Marshaler local_unmarshalable = std::move(unmarshalable);
+            CComPtr proxy_fail(local_unmarshalable.Unmarshal());
+            EXPECT_FALSE(proxy_fail);
+
+            Marshaler<IMarshalable> marsh_proxy(proxy2);
+            proxy2 = nullptr;
+            std::thread t3([marsh = std::move(marsh_proxy)]() mutable {
+              ComThread<COINIT_APARTMENTTHREADED>(
+                  [marsh = std::move(marsh)]() mutable {
+                    CComPtr proxy(marsh.Unmarshal());
+                    ASSERT_TRUE(proxy);
+                    TestTestNumbers(proxy);
+                    proxy = nullptr;
+                    // DebugBreak();
+                  });
+            });
+            t3.join();
+          });
+    });
+    ThreadMsgWaitForSingleObject(t2.native_handle(), INFINITE);
+    t2.join();
+  });
+  t1.join();
+}
+
+TEST(STA, TableMarshaling) {
+  std::thread t1(ComThread<COINIT_APARTMENTTHREADED>, []() {
+    CComPtr<IMarshalable> comobj;
+    ASSERT_EQ(comobj.CoCreateInstance(kCLSID_ExtZ_InProc_STA,
+                                      /*pUnkOuter*/ nullptr,
+                                      CLSCTX_INPROC_SERVER),
+              S_OK);
+    CComPtr<IGlobalInterfaceTable> git;
+    ASSERT_EQ(git.CoCreateInstance(CLSID_StdGlobalInterfaceTable,
+                                   /*pUnkOuter*/ nullptr, CLSCTX_INPROC_SERVER),
+              S_OK);
+    DWORD cookie1, cookie2;
+    ASSERT_EQ(git->RegisterInterfaceInGlobal(comobj, __uuidof(IMarshalable),
+                                             &cookie1),
+              S_OK);
+    CComQIPtr<IMarshalable_OleAuto> oleauto = comobj;
+    ASSERT_EQ(git->RegisterInterfaceInGlobal(
+                  oleauto, __uuidof(IMarshalable_OleAuto), &cookie2),
+              S_OK);
+    comobj = nullptr;
+    oleauto = nullptr;
+    Log(L"Cookie: %08x %08x\n", cookie1, cookie2);
+
+    std::thread t2(ComThread<COINIT_APARTMENTTHREADED>, [cookie1, cookie2]() {
+      CComPtr<IGlobalInterfaceTable> git;
+      ASSERT_EQ(git.CoCreateInstance(CLSID_StdGlobalInterfaceTable,
+                                     /*pUnkOuter*/ nullptr,
+                                     CLSCTX_INPROC_SERVER),
+                S_OK);
+
+      CComPtr<IMarshalable> proxy;
+      ASSERT_EQ(git->GetInterfaceFromGlobal(cookie1, __uuidof(IMarshalable),
+                                            reinterpret_cast<void **>(&proxy)),
+                S_OK);
+      EXPECT_EQ(git->RevokeInterfaceFromGlobal(cookie1), S_OK);
+      TestTestNumbers(proxy);
+
+      CComPtr<IMarshalable_OleAuto> oleauto;
+      ASSERT_EQ(
+          git->GetInterfaceFromGlobal(cookie2, __uuidof(IMarshalable_OleAuto),
+                                      reinterpret_cast<void **>(&oleauto)),
+          S_OK);
+      EXPECT_EQ(git->RevokeInterfaceFromGlobal(cookie2), S_OK);
+      TestTestNumbers(CComQIPtr<IMarshalable>(oleauto));
+      oleauto = nullptr;
+
+      DWORD cookie_proxy;
+      ASSERT_EQ(git->RegisterInterfaceInGlobal(proxy, __uuidof(IMarshalable),
+                                               &cookie_proxy),
+                S_OK);
+      proxy = nullptr;
+      Log(L"Cookie: %08x\n", cookie_proxy);
+
+      std::thread t3(ComThread<COINIT_APARTMENTTHREADED>,
+                     [git = std::move(git), cookie = cookie_proxy]() {
+                       CComPtr<IMarshalable> proxy;
+                       ASSERT_EQ(git->GetInterfaceFromGlobal(
+                                     cookie, __uuidof(IMarshalable),
+                                     reinterpret_cast<void **>(&proxy)),
+                                 S_OK);
+                       TestTestNumbers(proxy);
+                       proxy = nullptr;
+
+                       EXPECT_EQ(git->RevokeInterfaceFromGlobal(cookie), S_OK);
+
+                       // RevokeInterfaceFromGlobal posts a message to revoke a
+                       // table entry. Wait some cycles to give the message loop
+                       // to process that message to see the instance be
+                       // destroyed.
+                       ::Sleep(100);
+                       // DebugBreak();
+                     });
+      // This apartment also needs to process window messages in order
+      // to revoke the |cookie_proxy|.
+      ThreadMsgWaitForSingleObject(t3.native_handle(), INFINITE);
+      t3.join();
+    });
+    ThreadMsgWaitForSingleObject(t2.native_handle(), INFINITE);
+    t2.join();
+  });
+  t1.join();
+}
